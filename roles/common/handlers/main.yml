@@ -1,0 +1,5 @@
+---
+
+- name: waiting for server to come back after restart
+  local_action: wait_for host={{ inventory_hostname }} port=22 state=started delay=20 timeout=90
+  become: no

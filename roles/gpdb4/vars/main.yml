@@ -1,0 +1,19 @@
+---
+
+# if you change the version, Ansible will attempt a database upgrade
+
+# greenplum-db-4.3.9.0-build-1-rhel5-x86_64.zip
+#gpdb_major_version: 4
+#gpdb_minor_version: 3.9.0
+#gpdb_build_version: 1
+#gpdb_rhel_name: 'RHEL5'
+
+
+# Note: the string 'RHEL' was made lowercase between 4.3.9.0 and 4.3.9.1
+
+# greenplum-db-4.3.9.1-build-1-rhel5-x86_64.zip
+gpdb_major_version: 4
+gpdb_minor_version: 3.9.1
+gpdb_build_version: 1
+gpdb_rhel_name: 'rhel5'
+

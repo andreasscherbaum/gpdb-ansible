@@ -1,0 +1,10 @@
+epel_release:
+  "4": 10
+  "5": 4
+  "6": 8
+  "7": 5
+
+epel_repo_url: "http://dl.fedoraproject.org/pub/epel/epel-release-{{ epel_release[ansible_distribution_major_version] }}.noarch.rpm"
+epel_repo_gpg_key_path: "/etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-{{ ansible_distribution_major_version }}"
+#https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+#http://dl.fedoraproject.org/pub/epel/epel-release-5.noarch.rpm

@@ -1,0 +1,16 @@
+---
+
+- name: restart system
+  shell: ( /bin/sleep 5 ; /sbin/shutdown -r now "Ansible updates triggered" ) &
+  async: 30
+  poll: 0
+  ignore_errors: true
+
+
+- name: waiting for server to come back after reboot
+  local_action: wait_for host={{ inventory_hostname }} port=22 state=started delay=20 timeout=90
+  become: no
+
+
+- name: reload sysctl
+  shell: /sbin/sysctl -p /etc/sysctl.conf

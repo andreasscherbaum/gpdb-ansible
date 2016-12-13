@@ -1,0 +1,68 @@
+---
+
+# Install Development environment for GPDB v5 on Red Hat / CentOS
+
+- name: Install development packages
+  yum: name={{ item.package }} 
+       state=present
+  with_items:
+    - { package: automake }
+    - { package: make }
+    - { package: gcc-c++ }
+    - { package: gcc }
+    - { package: ed }
+    - { package: lsof }
+    - { package: ccache }
+    - { package: python-setuptools }
+    - { package: liblockfile }
+    - { package: python-lockfile }
+    - { package: python-psutil }
+    - { package: epydoc }
+    - { package: python-paramiko }
+    - { package: python-scp }
+    #- { package: git }
+    - { package: ccache }
+    - { package: PyYAML }
+    - { package: perl-ExtUtils-MakeMaker }
+    - { package: zlib }
+    - { package: zlib-devel }
+    - { package: curl }
+    - { package: curl-devel }
+    - { package: openssl }
+    - { package: openssl-devel }
+    - { package: openssl-devel }
+    - { package: svn }
+    - { package: tcl }
+    #- { package: perl-Locale-Msgfmt }
+    - { package: gettext }
+    - { package: asciidoc }
+    - { package: xmlto }
+    - { package: docbook2X }
+    - { package: expat-devel }
+    - { package: gettext-devel }
+    - { package: bison }
+    - { package: flex }
+    - { package: perl-ExtUtils-Embed }
+    - { package: perl-ExtUtils-MakeMaker }
+    - { package: readline }
+    - { package: readline-devel }
+    - { package: apr }
+    - { package: apr-devel }
+    - { package: apr-util }
+    - { package: apr-util-devel }
+    - { package: libevent }
+    - { package: libevent-devel }
+    - { package: xml2 }
+    - { package: libxml2 }
+    - { package: libxml2-devel }
+    - { package: bzip2 }
+    - { package: bzip2-devel }
+    - { package: libyaml }
+    - { package: libyaml-devel }
+    - { package: python-devel }
+    - { package: net-snmp }
+    - { package: net-snmp-devel }
+    - { package: net-snmp-agent-libs }
+    - { package: net-snmp-utils }
+    - { package: net-snmp-libs }
+  when: ansible_pkg_mgr == "yum"
