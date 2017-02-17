@@ -18,7 +18,7 @@
 
 # update package cache - required for any new software installation
 - name: Update yum cache
-  yum: update_cache=yes
+  yum: name=* state=latest update_cache=yes
   when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
 
 - name: Update apt cache
@@ -34,6 +34,17 @@
 #- name: Upgrade server
 #  apt: upgrade=dist
 #  when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+
+
+- name: Hostname
+  hostname: name={{ hostname }}
+  notify:
+    - restart system
+    - waiting for server to come back after restart
+
+
+- name: /etc/hosts
+  lineinfile: dest=/etc/hosts regexp='^{{ inventory_hostname }}\t' line='{{ inventory_hostname }}\tlocalhost localhost.localdomain localhost4 localhost4.localdomain4 {{ hostname }}' state=present
 
 
 - name: basic packages
@@ -54,6 +65,7 @@
     - pexpect
     - net-tools
     - ed
+    - m4
   when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
 
 - name: basic packages
@@ -82,7 +94,7 @@
 
 - name: install Red Hat version of 'needs-restarting'
   get_url:
-    url: https://github.com/rpm-software-management/yum-utils/blob/master/needs-restarting.py
+    url: https://raw.githubusercontent.com/rpm-software-management/yum-utils/master/needs-restarting.py
     dest: /root/needs-restarting.py
     mode: 0700
 
@@ -114,3 +126,5 @@
     - waiting for server to come back after restart
   when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
 
+
+- meta: flush_handlers
