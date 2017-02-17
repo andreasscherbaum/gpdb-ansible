@@ -1,0 +1,6 @@
+---
+
+# allow the role to be included multiple times
+allow_duplicates: yes
+dependencies:
+  - { role: common }

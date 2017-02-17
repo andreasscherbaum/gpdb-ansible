@@ -29,7 +29,7 @@
     gpdb_linkchange: False
 
 
-# Non-.existent /usr/local/greenplum-db is a new installation
+# Non-existent /usr/local/greenplum-db is a new installation
 - name: Identify Greenplum Database Installation
   set_fact:
     gpdb_install: True
@@ -146,6 +146,9 @@
 # FIXME: I/O scheduler
 
 
+- meta: flush_handlers
+
+
 ###########################################################
 # Database installation
 
@@ -167,9 +170,13 @@
   when: gpdb_install == True or gpdb_upgrade == True
 
 
-- name: Unzip Greenplum Database 4 archive
+- name: Unzip Greenplum Database 4 archive (Ansible < 2.2)
   unarchive: src=/home/gpadmin/gpdb4.zip dest=/home/gpadmin/gpdb4-tmp-install remote_src=yes copy=no owner=gpadmin group=gpadmin
-  when: gpdb_install == True or gpdb_upgrade == True
+  when: ( gpdb_install == True or gpdb_upgrade == True ) and ansible_version.full | version_compare('2.2.0.0', operator='<', strict=False)
+
+- name: Unzip Greenplum Database 4 archive (Ansible >= 2.2)
+  unarchive: src=/home/gpadmin/gpdb4.zip dest=/home/gpadmin/gpdb4-tmp-install remote_src=yes owner=gpadmin group=gpadmin
+  when: ( gpdb_install == True or gpdb_upgrade == True ) and ansible_version.full | version_compare('2.2.0.0', operator='>=', strict=False)
 
 
 # make next tasks easier by not always using the Ansible variables in the filename
@@ -186,12 +193,19 @@
     regexp: "{{ item.regexp }}"
     line: "{{ item.line }}"
     state: "{{ item.state }}"
+    backrefs: "{{ item.backrefs }}"
   with_items:
-    - { regexp: '^more << EOF', line: 'cat << EOF', state: present }
-    - { regexp: '^agreed=', line: 'agreed=1', state: present }
-    - { regexp: '^user_specified_installPath=', line: 'user_specified_installPath=/usr/local/greenplum-db-{{ gpdb_major_version }}.{{ gpdb_minor_version }}', state: present }
-    - { regexp: '^    agreed=', line: '    agreed=1', state: present }
+    - { regexp: '^more << EOF', line: 'cat << EOF', state: present, backrefs: no }
+    - { regexp: '^agreed=', line: 'agreed=1', state: present, backrefs: yes }
+    - { regexp: '^pathVerification=', line: 'pathVerification=1', state: present, backrefs: yes }
+    - { regexp: '^validMigrateDecision=', line: 'validMigrateDecision=1', state: present, backrefs: yes }
+    - { regexp: '^user_specified_installPath=', line: 'user_specified_installPath=/usr/local/greenplum-db-{{ gpdb_major_version }}.{{ gpdb_minor_version }}', state: present, backrefs: yes }
+    - { regexp: '^installPath=', line: 'installPath=/usr/local/greenplum-db-{{ gpdb_major_version }}.{{ gpdb_minor_version }}', state: present, backrefs: yes }
+    - { regexp: '^    agreed=', line: '    agreed=1', state: present, backrefs: yes }
   when: gpdb_install == True or gpdb_upgrade == True
+
+#- name: fail
+#  fail: msg="stop here"
 
 
 - name: Check if database is running
