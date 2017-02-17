@@ -25,7 +25,10 @@ then
 fi
 
 echo "scanning for ssh keys, adding keys to './known_hosts' file"
-ssh-keyscan -H $1 >> ./known_hosts
+ssh-keyscan $1 >> ./known_hosts
+awk '!x[$0]++' < ./known_hosts > ./known_hosts.tmp
+cat ./known_hosts.tmp > ./known_hosts
+rm -f ./known_hosts.tmp
 
 echo "pinging target host"
 ansible all --ask-pass --ssh-common-args='-o UserKnownHostsFile=./known_hosts' -m ping -i "$1," -u "$2"
