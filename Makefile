@@ -45,3 +45,6 @@ update:
 ssh:
 	#ssh -o UserKnownHostsFile=./known_hosts ${USERNAME}@${IP} "/usr/bin/sudo /bin/bash --login"
 	ssh -o UserKnownHostsFile=./known_hosts ${USERNAME}@${IP}
+
+
+.PHONY:	all init install update ssh
