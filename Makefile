@@ -42,9 +42,13 @@ update:
 	ansible-playbook --ssh-common-args='-o UserKnownHostsFile=./known_hosts' -i ${IP}, -u ${USERNAME} update-host.yml
 
 
+epel:
+	git clone https://github.com/geerlingguy/ansible-role-repo-epel.git roles/epel
+
+
 ssh:
 	#ssh -o UserKnownHostsFile=./known_hosts ${USERNAME}@${IP} "/usr/bin/sudo /bin/bash --login"
 	ssh -o UserKnownHostsFile=./known_hosts ${USERNAME}@${IP}
 
 
-.PHONY:	all init install update ssh
+.PHONY:	all init install update ssh epel
