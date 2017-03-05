@@ -1,0 +1,65 @@
+---
+
+# for now fail if it's not a Red Hat based system
+- name: Check OS (common)
+  fail: msg="Not a Red Hat based system!"
+  when: ansible_distribution != 'CentOS' and ansible_distribution != 'Red Hat Enterprise Linux'
+
+
+- name: basic packages
+  yum: name={{ item }} state=present
+  with_items:
+    - curl-devel
+    - expat-devel
+    - gettext-devel
+    - openssl-devel
+    - zlib-devel
+    - perl-ExtUtils-MakeMaker
+    - asciidoc
+    - xmlto
+    - autoconf
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+
+
+- name: Download git source
+  become: no
+  get_url:
+    url: https://www.kernel.org/pub/software/scm/git/git-{{ git_version }}.tar.gz
+    dest: /home/{{ ansible_ssh_user }}/git-{{ git_version }}.tar.gz
+  register: git_download
+
+
+- block:
+  - name: Create git compile directory
+    become: no
+    file: path=/home/{{ ansible_ssh_user }}/git-{{ git_version }} state=directory
+
+
+  - name: Unpack git source
+    become: no
+    unarchive:
+      src: /home/{{ ansible_ssh_user }}/git-{{ git_version }}.tar.gz
+      dest: /home/{{ ansible_ssh_user }}
+      remote_src: yes
+
+
+  - name: Compile git
+    become: no
+    shell: cd /home/{{ ansible_ssh_user }}/git-{{ git_version }} && {{ item }}
+    with_items:
+      - make configure
+      - ./configure --prefix=/usr/local
+      - make all
+
+
+  - name: Install git
+    become: yes
+    shell: cd /home/{{ ansible_ssh_user }}/git-{{ git_version }} && make install
+
+  when: git_download.changed
+
+
+
+
+
+- meta: flush_handlers
