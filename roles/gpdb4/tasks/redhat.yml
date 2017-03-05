@@ -153,6 +153,22 @@
 # Database installation
 
 
+- name: Create empty variable for data directories
+  set_fact: data_dirs=""
+  when: gpdb_install == True
+
+
+- name: Loop over number segments
+  #debug: msg="data_dirs={{ item }}"
+  set_fact: data_dirs="{{ data_dirs | replace('^ *', '') }} /data/seg{{ item }}"
+  with_sequence: start=1 end={{ gpdb_number_segments }} stride=1
+  when: gpdb_install == True
+
+
+- name: Copy removal script
+  copy: src=remove_gpdb4_installation.sh dest=/root/remove_gpdb4_installation.sh mode=0755 owner=root group=root
+
+
 - name: Copy Greenplum Database 4 zip file
   copy: src=greenplum-db-{{ gpdb_major_version }}.{{ gpdb_minor_version }}-build-{{ gpdb_build_version }}-{{ gpdb_rhel_name }}-x86_64.zip dest=/home/gpadmin/gpdb4.zip mode=0644 owner=gpadmin group=gpadmin
   when: gpdb_install == True or gpdb_upgrade == True
@@ -283,7 +299,8 @@
     state: "{{ item.state }}"
   with_items:
     - { regexp: '^MACHINE_LIST_FILE=', line: 'MACHINE_LIST_FILE=/home/gpadmin/hostlist_singlenode', state: present }
-    - { regexp: '^declare -a DATA_DIRECTORY=', line: 'declare -a DATA_DIRECTORY=( /data/seg1 /data/seg2 )', state: present }
+    #- { regexp: '^declare -a DATA_DIRECTORY=', line: 'declare -a DATA_DIRECTORY=( /data/seg1 /data/seg2 )', state: present }
+    - { regexp: '^declare -a DATA_DIRECTORY=', line: 'declare -a DATA_DIRECTORY=({{ data_dirs }} )', state: present }
     - { regexp: '^MASTER_HOSTNAME=', line: 'MASTER_HOSTNAME={{ ansible_hostname }}', state: present }
     - { regexp: '^MASTER_DIRECTORY=', line: 'MASTER_DIRECTORY=/data/master', state: present }
     - { regexp: '^#?DATABASE_NAME=', line: 'DATABASE_NAME=gpadmin', state: present }
@@ -297,6 +314,13 @@
 
 # Status: Config files ready, initialize database if required
 
+
+# check if the 'known_hosts' file exists - this is taken as sign that the ssh key exchange happened before
+- name: Check if the ssh login is already setup
+  stat: path=/home/gpadmin/.ssh/known_hosts
+  register: ssh_initialized
+
+
 - name: Check if the database is already initialized
   stat: path=/data
   register: gpdb_initialized
@@ -307,8 +331,12 @@
   with_items:
     - { path: '/data' }
     - { path: '/data/master' }
-    - { path: '/data/seg1' }
-    - { path: '/data/seg2' }
+  when: gpdb_initialized.stat.exists != True
+
+
+- name: Create /data segment directories
+  file: path=/data/seg{{ item }} state=directory owner=gpadmin group=gpadmin mode=0770
+  with_sequence: start=1 end={{ gpdb_number_segments }} stride=1
   when: gpdb_initialized.stat.exists != True
 
 
@@ -316,7 +344,7 @@
   become_user: gpadmin
   changed_when: False
   shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h 127.0.0.1 )
-  when: gpdb_initialized.stat.exists != True
+  when: ssh_initialized.stat.exists != True
   async: 60
   poll: 5
 
@@ -325,7 +353,7 @@
   become_user: gpadmin
   changed_when: False
   shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h localhost )
-  when: gpdb_initialized.stat.exists != True
+  when: ssh_initialized.stat.exists != True
   async: 60
   poll: 5
 
@@ -334,7 +362,7 @@
   become_user: gpadmin
   changed_when: False
   shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h {{ ansible_hostname }} )
-  when: gpdb_initialized.stat.exists != True
+  when: ssh_initialized.stat.exists != True
   async: 60
   poll: 5
 
@@ -343,7 +371,7 @@
   become_user: gpadmin
   changed_when: False
   shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h {{ ansible_nodename }} )
-  when: gpdb_initialized.stat.exists != True
+  when: ssh_initialized.stat.exists != True
   async: 60
   poll: 5
 
@@ -351,7 +379,7 @@
 - name: Generate ssh keys and setup passwordless login (127.0.0.1)
   changed_when: False
   shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h 127.0.0.1 )
-  when: gpdb_initialized.stat.exists != True
+  when: ssh_initialized.stat.exists != True
   async: 60
   poll: 5
 
@@ -359,7 +387,7 @@
 - name: Generate ssh keys and setup passwordless login (localhost)
   changed_when: False
   shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h localhost )
-  when: gpdb_initialized.stat.exists != True
+  when: ssh_initialized.stat.exists != True
   async: 60
   poll: 5
 
@@ -367,7 +395,7 @@
 - name: Generate ssh keys and setup passwordless login (ansible_hostname)
   changed_when: False
   shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h {{ ansible_hostname }} )
-  when: gpdb_initialized.stat.exists != True
+  when: ssh_initialized.stat.exists != True
   async: 60
   poll: 5
 
@@ -375,7 +403,7 @@
 - name: Generate ssh keys and setup passwordless login (ansible_nodename)
   changed_when: False
   shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h {{ ansible_nodename }} )
-  when: gpdb_initialized.stat.exists != True
+  when: ssh_initialized.stat.exists != True
   async: 60
   poll: 5
 
@@ -386,7 +414,8 @@
   shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpinitsystem -a -c /home/gpadmin/gpinitsystem_singlenode )
   register: init_db
   when: gpdb_initialized.stat.exists != True
-  failed_when: "'Successfully started 2 of 2 segment instances' not in init_db.stdout"
+  #failed_when: "'Successfully started 2 of 2 segment instances' not in init_db.stdout"
+  failed_when: init_db.rc > 1
   # 'async' and 'poll' do not work with 'failed_when'
 
 

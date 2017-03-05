@@ -30,3 +30,6 @@ gpdb_major_version: 4
 gpdb_minor_version: 3.11.1
 gpdb_build_version: 1
 gpdb_rhel_name: 'rhel5'
+
+
+gpdb_number_segments: 4
