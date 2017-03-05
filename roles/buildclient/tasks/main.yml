@@ -1,0 +1,65 @@
+---
+
+
+- name: Install GPDB Buildclient
+  become: no
+  shell: cd /home/{{ ansible_ssh_user }} && git clone https://github.com/andreasscherbaum/buildfarm-client.git buildclient
+  args:
+    creates: /home/{{ ansible_ssh_user }}/buildclient
+  register: buildclient
+
+
+- block:
+  - name: Create build directories
+    become: no
+    file: dest=/home/{{ ansible_ssh_user }}/{{ item }} state=directory
+    with_items:
+      - buildfarm
+      - buildfarm/cache
+      - buildfarm/build
+      - buildfarm/install
+
+
+  - name: Update buildclient GPDB demo
+    become: no
+    lineinfile:
+      dest: /home/{{ ansible_ssh_user }}/buildclient/{{ item }}
+      regexp: "^([\t ]*top-dir:)"
+      line: '\1 "$HOME/buildfarm"'
+      state: "present"
+      backrefs: yes
+    with_items:
+      - demo-config-gpdb.yaml
+      - demo-config-pg.yaml
+  when: buildclient.changed
+
+
+- name: Generate ssh keys
+  user:
+    name: "{{ ansible_ssh_user }}"
+    generate_ssh_key: yes
+    state: present
+  register: ssh_keys
+
+
+- block:
+  - name: Configure auto-login on localhost
+    become: no
+    shell: cat /home/{{ ansible_ssh_user }}/.ssh/id_rsa.pub >> /home/{{ ansible_ssh_user }}/.ssh/authorized_keys
+
+
+  - name: Make localhost known to ssh
+    become: no
+    shell: /usr/bin/ssh-keyscan -H {{ item }} >> /home/{{ ansible_ssh_user }}/.ssh/known_hosts
+    with_items:
+      - 127.0.0.1
+      - localhost
+      - "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}"
+      - "{{ hostname }}"
+
+  when: ssh_keys.changed
+
+
+
+
+- meta: flush_handlers
