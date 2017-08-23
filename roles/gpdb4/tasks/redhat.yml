@@ -7,6 +7,17 @@
 #       linkchange: /usr/local/greenplum-db points to another directory
 
 
+- name: Detect Google Cloud
+  stat: path=/etc/yum.repos.d/google-cloud.repo
+  register: google_cloud_detect
+
+
+- name: Register Google Cloud
+  set_fact:
+    google_cloud: true
+  when: google_cloud_detect.stat.exists
+
+
 - name: Check if any version of Greenplum Database is already installed
   stat: path=/usr/local/greenplum-db
   register: gpdb_installed
@@ -20,6 +31,22 @@
 - name: Sanity check for /usr/local/greenplum-db
   fail: msg="/usr/local/greenplum-db is supposed to be a symlink!"
   when: gpdb_installed.stat.exists == True and gpdb_installed.stat.islnk != True
+
+
+- name: Set name for binary installer file (name includes build number)
+  set_fact:
+    binary_installer_file: greenplum-db-{{ gpdb_major_version }}.{{ gpdb_minor_version }}-build-{{ gpdb_build_version }}-{{ gpdb_rhel_name }}-x86_64
+  when: gpdb_build_version is defined and gpdb_build_version != None
+
+
+- name: Set name for binary installer file (name does not include build number)
+  set_fact:
+    binary_installer_file: greenplum-db-{{ gpdb_major_version }}.{{ gpdb_minor_version }}-{{ gpdb_rhel_name }}-x86_64
+  when: gpdb_build_version is not defined or (gpdb_build_version is defined and gpdb_build_version == None)
+
+
+- name:
+  debug: msg="Installer name{{':'}} {{ binary_installer_file }}"
 
 
 - name: Set default values for run mode variables
@@ -66,7 +93,7 @@
 
 
 - name: Greenplum Database - Nothing to do
-  debug: msg="Nothing to do for (no installation/upgrade required)"
+  debug: msg="Nothing to do (no installation/upgrade required)"
   when: gpdb_install == False and gpdb_upgrade == False and gpdb_linkchange == False
 
 
@@ -133,6 +160,18 @@
     - reload sysctl
 
 
+- name: Modify /etc/ssh/sshd_config
+  lineinfile:
+    dest: /etc/ssh/sshd_config
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    state: "{{ item.state }}"
+  with_items:
+    - { regexp: '^PermitRootLogin', line: 'PermitRootLogin yes', state: present }
+  notify:
+    - reload sshd
+
+
 # move the security limits in it's own file,
 # instead of adding them to the main config file
 - name: Security limits
@@ -170,8 +209,7 @@
 
 
 - name: Copy Greenplum Database 4 zip file
-  copy: src=greenplum-db-{{ gpdb_major_version }}.{{ gpdb_minor_version }}-build-{{ gpdb_build_version }}-{{ gpdb_rhel_name }}-x86_64.zip dest=/home/gpadmin/gpdb4.zip mode=0644 owner=gpadmin group=gpadmin
-  when: gpdb_install == True or gpdb_upgrade == True
+  copy: src={{ binary_installer_file }}.zip dest=/home/gpadmin/{{ binary_installer_file }}.zip mode=0644 owner=gpadmin group=gpadmin
 
 
 - name: Remove old temp installer directory
@@ -186,18 +224,15 @@
   when: gpdb_install == True or gpdb_upgrade == True
 
 
-- name: Unzip Greenplum Database 4 archive (Ansible < 2.2)
-  unarchive: src=/home/gpadmin/gpdb4.zip dest=/home/gpadmin/gpdb4-tmp-install remote_src=yes copy=no owner=gpadmin group=gpadmin
-  when: ( gpdb_install == True or gpdb_upgrade == True ) and ansible_version.full | version_compare('2.2.0.0', operator='<', strict=False)
-
-- name: Unzip Greenplum Database 4 archive (Ansible >= 2.2)
-  unarchive: src=/home/gpadmin/gpdb4.zip dest=/home/gpadmin/gpdb4-tmp-install remote_src=yes owner=gpadmin group=gpadmin
-  when: ( gpdb_install == True or gpdb_upgrade == True ) and ansible_version.full | version_compare('2.2.0.0', operator='>=', strict=False)
+- block:
+  - name: Unzip Greenplum Database 4 archive (Ansible < 2.2)
+    unarchive: src=/home/gpadmin/{{ binary_installer_file }}.zip dest=/home/gpadmin/gpdb4-tmp-install remote_src=yes copy=no owner=gpadmin group=gpadmin
+    when: ansible_version.full | version_compare('2.2.0.0', operator='<', strict=False)
 
 
-# make next tasks easier by not always using the Ansible variables in the filename
-- name: Rename .bin file
-  command: creates=/home/gpadmin/gpdb4-tmp-install/gpdb4.bin mv /home/gpadmin/gpdb4-tmp-install/greenplum-db-{{ gpdb_major_version }}.{{ gpdb_minor_version }}-build-{{ gpdb_build_version }}-{{ gpdb_rhel_name }}-x86_64.bin /home/gpadmin/gpdb4-tmp-install/gpdb4.bin
+  - name: Unzip Greenplum Database 4 archive (Ansible >= 2.2)
+    unarchive: src=/home/gpadmin/{{ binary_installer_file }}.zip dest=/home/gpadmin/gpdb4-tmp-install remote_src=yes owner=gpadmin group=gpadmin
+    when: ansible_version.full | version_compare('2.2.0.0', operator='>=', strict=False)
   when: gpdb_install == True or gpdb_upgrade == True
 
 
@@ -205,7 +240,7 @@
 # Note: You hereby accept the license! Please see installer for remaining questions.
 - name: Accept license and make unattended installation possible
   lineinfile:
-    dest: /home/gpadmin/gpdb4-tmp-install/gpdb4.bin
+    dest: /home/gpadmin/gpdb4-tmp-install/{{ binary_installer_file }}.bin
     regexp: "{{ item.regexp }}"
     line: "{{ item.line }}"
     state: "{{ item.state }}"
@@ -240,7 +275,7 @@
 
 - name: Install Greenplum Database software in /usr/local
   become_user: gpadmin
-  command: /home/gpadmin/gpdb4-tmp-install/gpdb4.bin
+  command: /home/gpadmin/gpdb4-tmp-install/{{ binary_installer_file }}.bin
   when: gpdb_install == True or gpdb_upgrade == True
   async: 60
   poll: 5
@@ -316,9 +351,15 @@
 
 
 # check if the 'known_hosts' file exists - this is taken as sign that the ssh key exchange happened before
-- name: Check if the ssh login is already setup
+# that is not very reliable
+- name: Check if the ssh login for gpadmin is already setup
   stat: path=/home/gpadmin/.ssh/known_hosts
-  register: ssh_initialized
+  register: ssh_initialized_gpadmin
+
+
+- name: Check if the ssh login for root is already setup
+  stat: path=/root/.ssh/known_hosts
+  register: ssh_initialized_root
 
 
 - name: Check if the database is already initialized
@@ -340,72 +381,91 @@
   when: gpdb_initialized.stat.exists != True
 
 
-- name: Generate ssh keys for gpadmin and setup passwordless login (127.0.0.1)
-  become_user: gpadmin
-  changed_when: False
-  shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h 127.0.0.1 )
-  when: ssh_initialized.stat.exists != True
-  async: 60
-  poll: 5
+- block:
+  - name: Generate ssh keys for gpadmin and setup passwordless login (127.0.0.1)
+    become_user: gpadmin
+    changed_when: False
+    shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h 127.0.0.1 )
+    async: 60
+    poll: 5
 
 
-- name: Generate ssh keys for gpadmin and setup passwordless login (localhost)
-  become_user: gpadmin
-  changed_when: False
-  shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h localhost )
-  when: ssh_initialized.stat.exists != True
-  async: 60
-  poll: 5
+  - name: Generate ssh keys for gpadmin and setup passwordless login (IPv4)
+    become_user: gpadmin
+    changed_when: False
+    shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h {{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }} )
+    when: hostvars[inventory_hostname]['ansible_default_ipv4']['address'] is defined
+    async: 60
+    poll: 5
 
 
-- name: Generate ssh keys for gpadmin and setup passwordless login (ansible_hostname)
-  become_user: gpadmin
-  changed_when: False
-  shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h {{ ansible_hostname }} )
-  when: ssh_initialized.stat.exists != True
-  async: 60
-  poll: 5
+  - name: Generate ssh keys for gpadmin and setup passwordless login (localhost)
+    become_user: gpadmin
+    changed_when: False
+    shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h localhost )
+    async: 60
+    poll: 5
 
 
-- name: Generate ssh keys for gpadmin and setup passwordless login (ansible_nodename)
-  become_user: gpadmin
-  changed_when: False
-  shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h {{ ansible_nodename }} )
-  when: ssh_initialized.stat.exists != True
-  async: 60
-  poll: 5
+  - name: Generate ssh keys for gpadmin and setup passwordless login (ansible_hostname)
+    become_user: gpadmin
+    changed_when: False
+    shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h {{ ansible_hostname }} )
+    when: not google_cloud
+    async: 60
+    poll: 5
 
 
-- name: Generate ssh keys and setup passwordless login (127.0.0.1)
-  changed_when: False
-  shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h 127.0.0.1 )
-  when: ssh_initialized.stat.exists != True
-  async: 60
-  poll: 5
+  - name: Generate ssh keys for gpadmin and setup passwordless login (ansible_nodename)
+    become_user: gpadmin
+    changed_when: False
+    shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h {{ ansible_nodename }} )
+    when: not google_cloud
+    async: 60
+    poll: 5
+
+  when: ssh_initialized_gpadmin.stat.exists != True
 
 
-- name: Generate ssh keys and setup passwordless login (localhost)
-  changed_when: False
-  shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h localhost )
-  when: ssh_initialized.stat.exists != True
-  async: 60
-  poll: 5
+- block:
+  - name: Generate ssh keys for root and setup passwordless login (127.0.0.1)
+    changed_when: False
+    shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h 127.0.0.1 )
+    async: 60
+    poll: 5
 
 
-- name: Generate ssh keys and setup passwordless login (ansible_hostname)
-  changed_when: False
-  shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h {{ ansible_hostname }} )
-  when: ssh_initialized.stat.exists != True
-  async: 60
-  poll: 5
+  - name: Generate ssh keys for root and setup passwordless login (IPv4)
+    changed_when: False
+    shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h {{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }} )
+    when: hostvars[inventory_hostname]['ansible_default_ipv4']['address'] is defined
+    async: 60
+    poll: 5
 
 
-- name: Generate ssh keys and setup passwordless login (ansible_nodename)
-  changed_when: False
-  shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h {{ ansible_nodename }} )
-  when: ssh_initialized.stat.exists != True
-  async: 60
-  poll: 5
+  - name: Generate ssh keys for root and setup passwordless login (localhost)
+    changed_when: False
+    shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h localhost )
+    async: 60
+    poll: 5
+
+
+  - name: Generate ssh keys for root and setup passwordless login (ansible_hostname)
+    changed_when: False
+    shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h {{ ansible_hostname }} )
+    when: not google_cloud
+    async: 60
+    poll: 5
+
+
+  - name: Generate ssh keys for root and setup passwordless login (ansible_nodename)
+    changed_when: False
+    shell: ( . /usr/local/greenplum-db/greenplum_path.sh && gpssh-exkeys -h {{ ansible_nodename }} )
+    when: not google_cloud
+    async: 60
+    poll: 5
+
+  when: ssh_initialized_root.stat.exists != True
 
 
 - name: Initialize Greenplum Database cluster
@@ -478,3 +538,5 @@
 
 
 # Status: Greenplum Database up and running
+
+# FIXME: update bash history

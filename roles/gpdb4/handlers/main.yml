@@ -14,3 +14,9 @@
 
 - name: reload sysctl
   shell: /sbin/sysctl -p /etc/sysctl.conf
+
+
+- name: reload sshd
+  service:
+    name: sshd
+    state: reloaded

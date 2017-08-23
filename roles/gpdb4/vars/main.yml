@@ -1,5 +1,11 @@
 ---
 
+google_cloud: false
+
+# number of Greenplum Database segments
+gpdb_number_segments: 4
+
+
 # if you change the version, Ansible will attempt a database upgrade
 
 # greenplum-db-4.3.8.0-build-1-RHEL5-x86_64.zip
@@ -26,10 +32,15 @@
 
 
 # files/greenplum-db-4.3.11.1-build-1-rhel5-x86_64.zip
+#gpdb_major_version: 4
+#gpdb_minor_version: 3.11.1
+#gpdb_build_version: 1
+#gpdb_rhel_name: 'rhel5'
+
+
+# files/greenplum-db-4.3.16.1-rhel5-x86_64.zip
 gpdb_major_version: 4
-gpdb_minor_version: 3.11.1
-gpdb_build_version: 1
+gpdb_minor_version: 3.16.1
+gpdb_build_version:
 gpdb_rhel_name: 'rhel5'
 
-
-gpdb_number_segments: 4
