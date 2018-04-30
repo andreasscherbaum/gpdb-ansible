@@ -18,7 +18,7 @@ Best start with this [Ansible base](https://github.com/andreasscherbaum/ansible-
 git clone https://github.com/andreasscherbaum/ansible-base greenplum-database
 git clone https://github.com/geerlingguy/ansible-role-repo-epel.git greenplum-database/roles/epel
 git clone https://github.com/andreasscherbaum/gpdb-ansible.git gpdb-ansible
-for i in `cd gpdb-ansible/roles && ls`; do ln -s gpdb-ansible/roles/$i greenplum-database/roles/$i; done
+for i in `cd gpdb-ansible/roles && ls`; do ln -s ../../gpdb-ansible/roles/$i greenplum-database/roles/$i; done
 
 ```
 
